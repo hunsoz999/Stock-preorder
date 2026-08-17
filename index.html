@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>คลังสต๊อกเสื้อผ้า</title>
+  
+  <!-- โหลด Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- โหลด React และ ReactDOM -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  
+  <!-- โหลด Babel (ตัวแปลภาษา React) -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    /* ปิดไม่ให้ตัวเลขมีลูกศรขึ้นลงในบางเบราว์เซอร์ */
+    input[type=number]::-webkit-inner-spin-button, 
+    input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useMemo } = React;
+
+    // --- ส่วนสร้างไอคอน (แปลงมาให้เพื่อให้ทำงานในไฟล์เดียวได้) ---
+    const IconPlus = ({ size = 24, className = "", strokeWidth = 2 }) => (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/><path d="M12 5v14"/></svg>);
+    const IconMinus = ({ size = 24, className = "" }) => (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/></svg>);
+    const IconSearch = ({ size = 24, className = "" }) => (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>);
+    const IconChevronDown = ({ size = 24, className = "" }) => (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m6 9 6 6 6-6"/></svg>);
+    const IconChevronUp = ({ size = 24, className = "" }) => (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m18 15-6-6-6 6"/></svg>);
+    const IconTrash2 = ({ size = 24, className = "" }) => (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>);
+    const IconCopy = ({ size = 24, className = "" }) => (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>);
+    const IconX = ({ size = 24, className = "" }) => (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>);
+    const IconImagePlus = ({ size = 24, className = "" }) => (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7"/><line x1="16" x2="22" y1="5" y2="5"/><line x1="19" x2="19" y1="2" y2="8"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>);
+    const IconCheck = ({ size = 24, className = "" }) => (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="20 6 9 17 4 12"/></svg>);
+
+    const SIZES = [90, 100, 110, 120, 130, 140, 150, 160, 170];
+    const STORAGE_KEY = "products";
+
+    function emptySizes() {
+      const obj = {};
+      SIZES.forEach((s) => (obj[s] = 0));
+      return obj;
+    }
+
+    function resizeImageToDataUrl(file, maxW = 220, quality = 0.6) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error("อ่านไฟล์ไม่สำเร็จ"));
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onerror = () => reject(new Error("โหลดรูปไม่สำเร็จ"));
+          img.onload = () => {
+            const scale = Math.min(1, maxW / img.width);
+            const w = Math.max(1, Math.round(img.width * scale));
+            const h = Math.max(1, Math.round(img.height * scale));
+            const canvas = document.createElement("canvas");
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL("image/jpeg", quality));
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function totalOf(sizes) {
+      return Object.values(sizes || {}).reduce((a, b) => a + (Number(b) || 0), 0);
+    }
+
+    function uid() {
+      return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    }
+
+    // --- ส่วนระบบจัดการหลัก ---
+    function StockManager() {
+      const [products, setProducts] = useState([]);
+      const [loaded, setLoaded] = useState(false);
+      const [loadError, setLoadError] = useState(false);
+      const [expanded, setExpanded] = useState(() => new Set());
+      const [query, setQuery] = useState("");
+      const [showForm, setShowForm] = useState(false);
+      const [editingId, setEditingId] = useState(null);
+      const [copiedId, setCopiedId] = useState(null);
+      const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+      const saveTimer = useRef(null);
+
+      // โหลดข้อมูล
+      useEffect(() => {
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY);
+          if (saved) setProducts(JSON.parse(saved));
+        } catch (e) {
+          console.error("โหลดข้อมูลไม่สำเร็จ", e);
+        }
+        setLoaded(true);
+      }, []);
+
+      // บันทึกข้อมูลอัตโนมัติ
+      useEffect(() => {
+        if (!loaded) return;
+        clearTimeout(saveTimer.current);
+        saveTimer.current = setTimeout(() => {
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
+            setLoadError(false);
+          } catch (e) {
+            setLoadError(true);
+          }
+        }, 500);
+        return () => clearTimeout(saveTimer.current);
+      }, [products, loaded]);
+
+      const filtered = useMemo(() => {
+        const q = query.trim().toLowerCase();
+        let list = products;
+        if (q) list = list.filter((p) => p.sku.toLowerCase().includes(q));
+        return [...list].sort((a, b) => a.sku.localeCompare(b.sku, "th"));
+      }, [products, query]);
+
+      const grandTotal = useMemo(() => products.reduce((sum, p) => sum + totalOf(p.sizes), 0), [products]);
+
+      function toggleExpand(id) {
+        setExpanded((prev) => {
+          const next = new Set(prev);
+          next.has(id) ? next.delete(id) : next.add(id);
+          return next;
+        });
+      }
+
+      function updateSize(id, size, value) {
+        const n = Math.max(0, Number(value) || 0);
+        setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, sizes: { ...p.sizes, [size]: n } } : p)));
+      }
+
+      function bumpSize(id, size, delta) {
+        setProducts((prev) =>
+          prev.map((p) => {
+            if (p.id !== id) return p;
+            const cur = Number(p.sizes[size]) || 0;
+            return { ...p, sizes: { ...p.sizes, [size]: Math.max(0, cur + delta) } };
+          })
+        );
+      }
+
+      function deleteProduct(id) {
+        setProducts((prev) => prev.filter((p) => p.id !== id));
+        setConfirmDeleteId(null);
+      }
+
+      function openAddForm() {
+        setEditingId(null);
+        setShowForm(true);
+      }
+
+      function openEditForm(id) {
+        setEditingId(id);
+        setShowForm(true);
+      }
+
+      function upsertProduct(data) {
+        if (editingId) {
+          setProducts((prev) => prev.map((p) => (p.id === editingId ? { ...p, ...data } : p)));
+        } else {
+          setProducts((prev) => [...prev, { id: uid(), ...data }]);
+        }
+        setShowForm(false);
+        setEditingId(null);
+      }
+
+      async function copySummary(p) {
+        const lines = SIZES.filter((s) => (p.sizes[s] || 0) > 0).map((s) => `ไซส์ ${s}: เหลือ ${p.sizes[s]} ตัว`);
+        const text = [
+          `SKU: ${p.sku}`,
+          p.price ? `ราคา: ${p.price} บาท` : null,
+          lines.length ? lines.join("\n") : "ขณะนี้ของหมดสต๊อกทุกไซส์",
+        ].filter(Boolean).join("\n");
+        
+        try {
+          await navigator.clipboard.writeText(text);
+          setCopiedId(p.id);
+          setTimeout(() => setCopiedId(null), 1500);
+        } catch (e) {
+            // ระบบสำรองกรณีเบราว์เซอร์ไม่รองรับ
+            const el = document.createElement('textarea');
+            el.value = text;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            setCopiedId(p.id);
+            setTimeout(() => setCopiedId(null), 1500);
+        }
+      }
+
+      const editingProduct = editingId ? products.find((p) => p.id === editingId) : null;
+
+      return (
+        <div className="min-h-screen bg-stone-50 text-stone-800">
+          <div className="max-w-2xl mx-auto px-4 pb-28 pt-5">
+            <header className="mb-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h1 className="text-xl font-bold text-stone-900 tracking-tight">คลังสต๊อกเสื้อผ้า</h1>
+                  <p className="text-sm text-stone-500 mt-0.5">
+                    {products.length} แบบ · รวม {grandTotal.toLocaleString()} ตัว
+                  </p>
+                </div>
+                <button
+                  onClick={openAddForm}
+                  className="flex items-center gap-1.5 bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white font-medium rounded-full pl-3 pr-4 py-2.5 shadow-sm shadow-rose-200 transition-colors"
+                >
+                  <IconPlus size={18} strokeWidth={2.5} />
+                  <span className="text-sm">เพิ่มแบบ</span>
+                </button>
+              </div>
+
+              <div className="relative mt-4">
+                <IconSearch size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="ค้นหาด้วย SKU..."
+                  className="w-full bg-white border border-stone-200 rounded-xl pl-9 pr-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300"
+                />
+              </div>
+              {loadError && (
+                <p className="text-xs text-amber-600 mt-2">⚠ บันทึกข้อมูลไม่สำเร็จ ลองแก้ไขอีกครั้ง</p>
+              )}
+            </header>
+
+            {!loaded && <p className="text-center text-stone-400 text-sm py-10">กำลังโหลดข้อมูล...</p>}
+
+            {loaded && filtered.length === 0 && (
+              <div className="text-center py-16 px-6 bg-white rounded-2xl border border-dashed border-stone-300">
+                <p className="text-stone-500 text-sm">
+                  {products.length === 0 ? "ยังไม่มีแบบเสื้อผ้าในระบบ กดปุ่ม “เพิ่มแบบ” เพื่อเริ่มต้น" : "ไม่พบ SKU ที่ค้นหา"}
+                </p>
+              </div>
+            )}
+
+            <div className="space-y-2.5">
+              {filtered.map((p) => {
+                const total = totalOf(p.sizes);
+                const isExpanded = expanded.has(p.id);
+                const visibleSizes = SIZES.filter((s) => (p.sizes[s] || 0) > 0);
+                
+                const statusColor = total > 0 ? "bg-emerald-500" : "bg-stone-300";
+                const statusText = total > 0 ? "text-emerald-600" : "text-stone-400";
+                const statusLabel = total > 0 ? "มีสินค้า" : "ของหมด";
+
+                return (
+                  <div key={p.id} className="bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-sm">
+                    <button
+                      onClick={() => toggleExpand(p.id)}
+                      className="w-full flex items-center gap-3 p-3 text-left active:bg-stone-50 transition-colors"
+                    >
+                      {p.image ? (
+                        <img src={p.image} alt={p.sku} className="w-14 h-14 rounded-xl object-cover flex-shrink-0 border border-stone-100" />
+                      ) : (
+                        <div className="w-14 h-14 rounded-xl bg-stone-100 flex items-center justify-center flex-shrink-0 text-stone-300">
+                          <IconImagePlus size={20} />
+                        </div>
+                      )}
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold text-stone-900 truncate">{p.sku}</span>
+                          {p.price ? <span className="text-sm text-stone-600 flex-shrink-0">฿{Number(p.price).toLocaleString()}</span> : null}
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-1.5">
+                          <span className={`w-1.5 h-1.5 rounded-full ${statusColor} flex-shrink-0`} />
+                          <span className={`text-xs font-medium ${statusText}`}>
+                            {statusLabel} · รวม {total} ตัว
+                          </span>
+                        </div>
+                      </div>
+
+                      {isExpanded ? <IconChevronUp size={18} className="text-stone-400 flex-shrink-0" /> : <IconChevronDown size={18} className="text-stone-400 flex-shrink-0" />}
+                    </button>
+
+                    {isExpanded && (
+                      <div className="px-3 pb-3 border-t border-stone-100 pt-2 bg-stone-50/50">
+                        {visibleSizes.length === 0 && (
+                          <p className="text-sm text-stone-400 text-center py-3">ของหมดสต๊อกในทุกไซส์ (กดแก้ไขเพื่อเพิ่มของ)</p>
+                        )}
+                        <div className="divide-y divide-stone-100">
+                          {visibleSizes.map((s) => (
+                            <div key={s} className="flex items-center gap-3 py-2">
+                              <span className="text-sm text-stone-600 font-medium w-16 flex-shrink-0">ไซส์ {s}</span>
+                              <div className="flex items-center gap-2 ml-auto flex-shrink-0">
+                                <button
+                                  onClick={() => bumpSize(p.id, s, -1)}
+                                  className="w-7 h-7 rounded-md bg-white border border-stone-200 flex items-center justify-center text-stone-500 active:bg-stone-100 flex-shrink-0 shadow-sm"
+                                >
+                                  <IconMinus size={13} />
+                                </button>
+                                <input
+                                  type="number"
+                                  value={p.sizes[s] ?? 0}
+                                  onChange={(e) => updateSize(p.id, s, e.target.value)}
+                                  className="w-12 text-center text-sm font-semibold bg-transparent outline-none"
+                                />
+                                <button
+                                  onClick={() => bumpSize(p.id, s, 1)}
+                                  className="w-7 h-7 rounded-md bg-white border border-stone-200 flex items-center justify-center text-stone-500 active:bg-stone-100 flex-shrink-0 shadow-sm"
+                                >
+                                  <IconPlus size={13} />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="flex items-center gap-2 mt-3">
+                          <div className="flex-1" />
+                          <button
+                            onClick={() => copySummary(p)}
+                            className="flex items-center gap-1 text-xs font-medium text-stone-600 bg-white border border-stone-200 hover:bg-stone-50 rounded-lg px-2.5 py-1.5 shadow-sm"
+                          >
+                            {copiedId === p.id ? <IconCheck size={13} className="text-emerald-600" /> : <IconCopy size={13} />}
+                            {copiedId === p.id ? "คัดลอกแล้ว" : "คัดลอกให้ลูกค้า"}
+                          </button>
+                          <button
+                            onClick={() => openEditForm(p.id)}
+                            className="text-xs font-medium text-stone-600 bg-white border border-stone-200 hover:bg-stone-50 rounded-lg px-2.5 py-1.5 shadow-sm"
+                          >
+                            แก้ไข
+                          </button>
+                          {confirmDeleteId === p.id ? (
+                            <button
+                              onClick={() => deleteProduct(p.id)}
+                              className="flex items-center gap-1 text-xs font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg px-2.5 py-1.5 shadow-sm"
+                            >
+                              <IconTrash2 size={13} /> ยืนยันลบ
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => setConfirmDeleteId(p.id)}
+                              onBlur={() => setTimeout(() => setConfirmDeleteId(null), 2000)}
+                              className="flex items-center justify-center text-stone-400 hover:text-red-500 bg-white border border-stone-200 hover:bg-red-50 rounded-lg px-2.5 py-1.5 shadow-sm"
+                            >
+                              <IconTrash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {showForm && (
+            <ProductForm
+              key={editingId || "new"}
+              initial={editingProduct}
+              onCancel={() => {
+                setShowForm(false);
+                setEditingId(null);
+              }}
+              onSave={upsertProduct}
+            />
+          )}
+        </div>
+      );
+    }
+
+    // --- ส่วนฟอร์มจัดการสินค้า ---
+    function ProductForm({ initial, onCancel, onSave }) {
+      const [sku, setSku] = useState(initial?.sku || "");
+      const [price, setPrice] = useState(initial?.price ?? "");
+      const [image, setImage] = useState(initial?.image || null);
+      const [sizes, setSizes] = useState(initial?.sizes || emptySizes());
+      const [uploading, setUploading] = useState(false);
+      const [error, setError] = useState("");
+
+      const totalCurrent = totalOf(sizes);
+
+      async function handleFile(e) {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setUploading(true);
+        try {
+          const dataUrl = await resizeImageToDataUrl(file);
+          setImage(dataUrl);
+        } catch (err) {
+          setError("อัปโหลดรูปไม่สำเร็จ ลองใหม่อีกครั้ง");
+        }
+        setUploading(false);
+      }
+
+      function handleSubmit() {
+        if (!sku.trim()) {
+          setError("กรุณาใส่ SKU");
+          return;
+        }
+        onSave({
+          sku: sku.trim(),
+          price: price === "" ? "" : Number(price),
+          image,
+          sizes,
+        });
+      }
+
+      return (
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4 backdrop-blur-sm">
+          <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl flex flex-col shadow-2xl" style={{ maxHeight: "92vh" }}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-stone-100 flex-shrink-0">
+              <h2 className="font-semibold text-stone-900">{initial ? "แก้ไขแบบเสื้อผ้า" : "เพิ่มแบบเสื้อผ้า"}</h2>
+              <button onClick={onCancel} className="text-stone-400 hover:text-stone-600 p-1">
+                <IconX size={20} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto px-4 py-4 space-y-4">
+              <div className="flex items-center gap-3">
+                <label className="w-20 h-20 rounded-xl bg-stone-50 border border-dashed border-stone-300 flex items-center justify-center flex-shrink-0 overflow-hidden cursor-pointer active:bg-stone-100">
+                  {image ? (
+                    <img src={image} alt="" className="w-full h-full object-cover" />
+                  ) : uploading ? (
+                    <span className="text-[10px] text-stone-400">กำลังโหลด...</span>
+                  ) : (
+                    <IconImagePlus size={22} className="text-stone-300" />
+                  )}
+                  <input type="file" accept="image/*" className="hidden" onChange={handleFile} />
+                </label>
+                <div className="flex-1 space-y-2">
+                  <div>
+                    <label className="text-xs text-stone-500 font-medium">SKU</label>
+                    <input
+                      value={sku}
+                      onChange={(e) => setSku(e.target.value)}
+                      placeholder="เช่น 690211"
+                      className="w-full mt-0.5 bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-2 text-sm outline-none focus:ring-2 focus:ring-rose-300"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-stone-500 font-medium">ราคา (บาท)</label>
+                  <input
+                    type="number"
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    placeholder="0"
+                    className="w-full mt-0.5 bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-2 text-sm outline-none focus:ring-2 focus:ring-rose-300"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-stone-500 font-medium">จำนวนรวมทั้งหมด (ตัว)</label>
+                  <div className="w-full mt-0.5 bg-stone-100/50 border border-transparent rounded-lg px-2.5 py-2 text-sm text-stone-600 font-semibold flex items-center">
+                    {totalCurrent}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs text-stone-500 font-medium mb-1 block">จำนวนแต่ละไซส์</label>
+                <div className="bg-stone-50 rounded-lg border border-stone-100 divide-y divide-stone-200 px-3">
+                  {SIZES.map((s) => (
+                    <div key={s} className="flex items-center justify-between py-2">
+                      <span className="text-sm text-stone-600 font-medium">ไซส์ {s}</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSizes((prev) => ({ ...prev, [s]: Math.max(0, (Number(prev[s]) || 0) - 1) }))}
+                          className="w-7 h-7 rounded-md bg-white border border-stone-200 flex items-center justify-center text-stone-500 active:bg-stone-100 shadow-sm"
+                        >
+                          <IconMinus size={13} />
+                        </button>
+                        <input
+                          type="number"
+                          value={sizes[s] ?? 0}
+                          onChange={(e) => setSizes((prev) => ({ ...prev, [s]: Math.max(0, Number(e.target.value) || 0) }))}
+                          className="w-12 text-center text-sm font-semibold bg-transparent outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setSizes((prev) => ({ ...prev, [s]: Math.max(0, (Number(prev[s]) || 0) + 1) }))}
+                          className="w-7 h-7 rounded-md bg-white border border-stone-200 flex items-center justify-center text-stone-500 active:bg-stone-100 shadow-sm"
+                        >
+                          <IconPlus size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {error && <p className="text-xs text-red-500">{error}</p>}
+            </div>
+
+            <div className="p-4 border-t border-stone-100 flex-shrink-0">
+              <button
+                onClick={handleSubmit}
+                className="w-full bg-rose-500 hover:bg-rose-600 text-white font-medium rounded-xl py-3 text-sm shadow-sm shadow-rose-200"
+              >
+                {initial ? "บันทึกการแก้ไข" : "เพิ่มลงคลัง"}
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ประมวลผล React ลงใน HTML
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<StockManager />);
+  </script>
+</body>
+</html>
