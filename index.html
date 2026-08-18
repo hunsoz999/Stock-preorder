@@ -123,8 +123,8 @@
       const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();
         let list = products;
-        if (q) list = list.filter((p) => p.sku.toLowerCase().includes(q) || (p.name && p.name.toLowerCase().includes(q)));
-        return [...list].sort((a, b) => a.sku.localeCompare(b.sku, "th"));
+        if (q) list = list.filter((p) => String(p.sku || "").toLowerCase().includes(q) || (p.name && String(p.name).toLowerCase().includes(q)));
+        return [...list].sort((a, b) => String(a.sku || "").localeCompare(String(b.sku || ""), "th"));
       }, [products, query]);
 
       const grandTotal = useMemo(() => products.reduce((sum, p) => sum + totalOf(p.sizes), 0), [products]);
@@ -156,7 +156,6 @@
         setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, highlightColor: color } : p)));
       }
 
-      // ฟังก์ชันรีเซ็ตสีทั้งหมด
       function resetAllHighlights() {
         setProducts((prev) => prev.map((p) => ({ ...p, highlightColor: 'none' })));
       }
@@ -236,7 +235,6 @@
         none: 'bg-white border-stone-200'
       };
 
-      // ตรวจสอบว่ามีสินค้าที่ถูกไฮไลต์สีไว้หรือไม่ เพื่อแสดงปุ่มรีเซ็ต
       const hasHighlightedProducts = products.some(p => p.highlightColor && p.highlightColor !== 'none');
 
       return (
@@ -274,7 +272,6 @@
                 />
               </div>
 
-              {/* แถบเมนูด้านล่างช่องค้นหา: แสดงจำนวนและปุ่มรีเซ็ตสีไฮไลต์ */}
               <div className="flex items-center justify-between mt-3 px-1">
                 <span className="text-xs font-medium text-stone-500">
                   {query ? `พบ ${filtered.length} รายการ` : `รายการทั้งหมด ${products.length} แบบ`}
@@ -375,7 +372,7 @@
                     </div>
 
                     {isExpanded && (
-                      <div className="px-3 pb-3 border-t border-black/10 pt-2 bg-white/60 backdrop-blur-sm">
+                      <div className="px-3 pb-3 border-t border-black/10 pt-2 bg-white/80">
                         {visibleSizes.length === 0 && (
                           <p className="text-sm text-stone-500 text-center py-3 font-medium">ของหมดสต๊อกในทุกไซส์ (กดแก้ไขเพื่อเพิ่มของ)</p>
                         )}
@@ -385,7 +382,7 @@
                               <span className="text-sm text-stone-800 font-bold w-16 flex-shrink-0">ไซส์ {s}</span>
                               <div className="flex items-center gap-2 ml-auto flex-shrink-0">
                                 <button
-                                  onClick={() => bumpSize(p.id, s, -1)}
+                                  onClick={(e) => { e.stopPropagation(); bumpSize(p.id, s, -1); }}
                                   className="w-7 h-7 rounded-md bg-white border border-stone-200 flex items-center justify-center text-stone-600 active:bg-stone-100 flex-shrink-0 shadow-sm"
                                 >
                                   <IconMinus size={14} />
@@ -394,10 +391,11 @@
                                   type="number"
                                   value={p.sizes[s] ?? 0}
                                   onChange={(e) => updateSize(p.id, s, e.target.value)}
+                                  onClick={(e) => e.stopPropagation()}
                                   className="w-12 text-center text-sm font-bold text-stone-900 bg-transparent outline-none"
                                 />
                                 <button
-                                  onClick={() => bumpSize(p.id, s, 1)}
+                                  onClick={(e) => { e.stopPropagation(); bumpSize(p.id, s, 1); }}
                                   className="w-7 h-7 rounded-md bg-white border border-stone-200 flex items-center justify-center text-stone-600 active:bg-stone-100 flex-shrink-0 shadow-sm"
                                 >
                                   <IconPlus size={14} />
@@ -410,36 +408,36 @@
                         <div className="flex items-center flex-wrap gap-y-3 mt-4 pt-3 border-t border-black/10">
                           <div className="flex items-center gap-1.5 mr-auto bg-white/50 px-2 py-1.5 rounded-lg">
                             <span className="text-[11px] font-bold text-stone-600 mr-1">ป้ายสี:</span>
-                            <button onClick={() => updateHighlight(p.id, 'none')} className={`w-5 h-5 rounded-full border-2 ${!p.highlightColor || p.highlightColor === 'none' ? 'border-stone-500 bg-white' : 'border-transparent bg-stone-300'}`} />
-                            <button onClick={() => updateHighlight(p.id, 'blue')} className={`w-5 h-5 rounded-full border-2 ${p.highlightColor === 'blue' ? 'border-blue-700 bg-blue-500' : 'border-transparent bg-blue-400'}`} />
-                            <button onClick={() => updateHighlight(p.id, 'green')} className={`w-5 h-5 rounded-full border-2 ${p.highlightColor === 'green' ? 'border-emerald-700 bg-emerald-500' : 'border-transparent bg-emerald-400'}`} />
-                            <button onClick={() => updateHighlight(p.id, 'yellow')} className={`w-5 h-5 rounded-full border-2 ${p.highlightColor === 'yellow' ? 'border-amber-700 bg-amber-500' : 'border-transparent bg-amber-400'}`} />
+                            <button onClick={(e) => { e.stopPropagation(); updateHighlight(p.id, 'none'); }} className={`w-5 h-5 rounded-full border-2 ${!p.highlightColor || p.highlightColor === 'none' ? 'border-stone-500 bg-white' : 'border-transparent bg-stone-300'}`} />
+                            <button onClick={(e) => { e.stopPropagation(); updateHighlight(p.id, 'blue'); }} className={`w-5 h-5 rounded-full border-2 ${p.highlightColor === 'blue' ? 'border-blue-700 bg-blue-500' : 'border-transparent bg-blue-400'}`} />
+                            <button onClick={(e) => { e.stopPropagation(); updateHighlight(p.id, 'green'); }} className={`w-5 h-5 rounded-full border-2 ${p.highlightColor === 'green' ? 'border-emerald-700 bg-emerald-500' : 'border-transparent bg-emerald-400'}`} />
+                            <button onClick={(e) => { e.stopPropagation(); updateHighlight(p.id, 'yellow'); }} className={`w-5 h-5 rounded-full border-2 ${p.highlightColor === 'yellow' ? 'border-amber-700 bg-amber-500' : 'border-transparent bg-amber-400'}`} />
                           </div>
 
                           <div className="flex items-center gap-2">
                             <button
-                              onClick={() => copySummary(p)}
+                              onClick={(e) => { e.stopPropagation(); copySummary(p); }}
                               className="flex items-center gap-1 text-xs font-bold text-stone-700 bg-white border border-stone-200 hover:bg-stone-50 rounded-lg px-2.5 py-1.5 shadow-sm"
                             >
                               {copiedStatus.id === p.id && copiedStatus.type === 'summary' ? <IconCheck size={14} className="text-emerald-600" /> : <IconCopy size={14} />}
                               {copiedStatus.id === p.id && copiedStatus.type === 'summary' ? "คัดลอกแล้ว" : "สรุปยอด"}
                             </button>
                             <button
-                              onClick={() => openEditForm(p.id)}
+                              onClick={(e) => { e.stopPropagation(); openEditForm(p.id); }}
                               className="text-xs font-bold text-stone-700 bg-white border border-stone-200 hover:bg-stone-50 rounded-lg px-2.5 py-1.5 shadow-sm"
                             >
                               แก้ไข
                             </button>
                             {confirmDeleteId === p.id ? (
                               <button
-                                onClick={() => deleteProduct(p.id)}
+                                onClick={(e) => { e.stopPropagation(); deleteProduct(p.id); }}
                                 className="flex items-center gap-1 text-xs font-bold text-white bg-red-500 hover:bg-red-600 rounded-lg px-2.5 py-1.5 shadow-sm"
                               >
                                 <IconTrash2 size={14} /> ยืนยันลบ
                               </button>
                             ) : (
                               <button
-                                onClick={() => setConfirmDeleteId(p.id)}
+                                onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(p.id); }}
                                 onBlur={() => setTimeout(() => setConfirmDeleteId(null), 2000)}
                                 className="flex items-center justify-center text-stone-500 hover:text-red-500 bg-white border border-stone-200 hover:bg-red-50 rounded-lg px-2.5 py-1.5 shadow-sm"
                               >
@@ -482,7 +480,7 @@
           )}
 
           {showBackup && (
-            <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4 backdrop-blur-sm">
+            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
               <div className="bg-white w-full max-w-md rounded-2xl flex flex-col shadow-2xl overflow-hidden">
                 <div className="px-4 py-3 border-b border-stone-100 flex justify-between items-center bg-stone-50">
                   <h2 className="font-bold text-stone-800">จัดการข้อมูล (สำรอง / นำเข้า)</h2>
@@ -540,13 +538,13 @@
       }
 
       function handleSubmit() {
-        if (!sku.trim()) {
+        if (!String(sku).trim()) {
           setError("กรุณาใส่ SKU");
           return;
         }
         onSave({
-          sku: sku.trim(),
-          name: name.trim(),
+          sku: String(sku).trim(),
+          name: String(name).trim(),
           price: price === "" ? "" : Number(price),
           image,
           sizes,
@@ -554,7 +552,7 @@
       }
 
       return (
-        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
           <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl flex flex-col shadow-2xl" style={{ maxHeight: "92vh" }}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-stone-100 flex-shrink-0">
               <h2 className="font-bold text-stone-900">{initial ? "แก้ไขแบบสินค้า" : "เพิ่มแบบสินค้า"}</h2>
