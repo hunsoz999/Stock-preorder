@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <!-- เปลี่ยนสัญลักษณ์ Icon ของเว็บเป็นตัว M -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90' font-family='sans-serif' fill='%23f43f5e'>M</text></svg>">
-  <title>คลังสต๊อกเสื้อผ้า</title>
+  <title>คลังสต๊อกสินค้า</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
@@ -86,6 +85,12 @@
       const [editingId, setEditingId] = useState(null);
       const [copiedStatus, setCopiedStatus] = useState({ id: null, type: null });
       const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+      
+      // ส่วนของการจัดการระบบกู้คืนข้อมูล
+      const [showBackup, setShowBackup] = useState(false);
+      const [backupText, setBackupText] = useState("");
+      const [backupError, setBackupError] = useState("");
+
       const saveTimer = useRef(null);
 
       useEffect(() => {
@@ -193,8 +198,8 @@
       function copySummary(p) {
         const lines = SIZES.filter((s) => (p.sizes[s] || 0) > 0).map((s) => `ไซส์ ${s}: เหลือ ${p.sizes[s]} ตัว`);
         const text = [
-          `SKU: ${p.sku}`,
           p.name ? `ชื่อ: ${p.name}` : null,
+          `SKU: ${p.sku}`,
           p.price ? `ราคา: ${p.price} บาท` : null,
           lines.length ? lines.join("\n") : "ขณะนี้ของหมดสต๊อกทุกไซส์",
         ].filter(Boolean).join("\n");
@@ -202,13 +207,25 @@
         copyToClipboard(text, p.id, 'summary');
       }
 
-      const editingProduct = editingId ? products.find((p) => p.id === editingId) : null;
+      function handleImportData() {
+        try {
+          const parsed = JSON.parse(backupText);
+          if (Array.isArray(parsed)) {
+            setProducts(parsed);
+            setShowBackup(false);
+          } else {
+            setBackupError("ข้อมูลไม่ถูกต้อง (ต้องเป็นรายการสินค้า)");
+          }
+        } catch (e) {
+          setBackupError("รูปแบบข้อมูลผิดพลาด กรุณาตรวจสอบให้แน่ใจว่าคัดลอกมาครบถ้วน");
+        }
+      }
 
-      // ระบบจัดการสี
+      // ปรับสีให้เข้มขึ้นกว่าเดิม เพื่อให้เห็นชัดเจนขึ้นมาก แต่ยังอ่านตัวอักษรได้สบายตา
       const bgColors = {
-        blue: 'bg-sky-50 border-sky-200',
-        green: 'bg-emerald-50 border-emerald-200',
-        yellow: 'bg-amber-50 border-amber-200',
+        blue: 'bg-blue-300 border-blue-500',
+        green: 'bg-emerald-300 border-emerald-500',
+        yellow: 'bg-amber-300 border-amber-500',
         none: 'bg-white border-stone-200'
       };
 
@@ -242,7 +259,7 @@
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="ค้นหาด้วย SKU หรือชื่อสินค้า..."
+                  placeholder="ค้นหาด้วยชื่อสินค้า หรือ SKU..."
                   className="w-full bg-white border border-stone-200 rounded-xl pl-9 pr-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300"
                 />
               </div>
@@ -261,14 +278,14 @@
               </div>
             )}
 
-            <div className="space-y-2.5">
+            <div className="space-y-3">
               {filtered.map((p) => {
                 const total = totalOf(p.sizes);
                 const isExpanded = expanded.has(p.id);
                 const visibleSizes = SIZES.filter((s) => (p.sizes[s] || 0) > 0);
                 
-                const statusColor = total > 0 ? "bg-emerald-500" : "bg-stone-300";
-                const statusText = total > 0 ? "text-emerald-600" : "text-stone-400";
+                const statusColor = total > 0 ? "bg-emerald-500" : "bg-red-400";
+                const statusText = total > 0 ? "text-emerald-700" : "text-red-500";
                 const statusLabel = total > 0 ? "มีสินค้า" : "ของหมด";
                 
                 const cardBg = bgColors[p.highlightColor || 'none'];
@@ -277,76 +294,88 @@
                   <div key={p.id} className={`rounded-2xl border overflow-hidden shadow-sm transition-colors duration-200 ${cardBg}`}>
                     <div
                       onClick={() => toggleExpand(p.id)}
-                      className="w-full flex items-center gap-3 p-3 cursor-pointer"
+                      className="w-full flex items-start gap-3 p-3 cursor-pointer"
                     >
                       {p.image ? (
-                        <img src={p.image} alt={p.sku} className="w-14 h-14 rounded-xl object-cover flex-shrink-0 border border-black/5" />
+                        <img src={p.image} alt={p.sku} className="w-16 h-16 rounded-xl object-cover flex-shrink-0 border border-black/10 bg-white" />
                       ) : (
-                        <div className="w-14 h-14 rounded-xl bg-black/5 flex items-center justify-center flex-shrink-0 text-stone-400">
-                          <IconImagePlus size={20} />
+                        <div className="w-16 h-16 rounded-xl bg-black/5 border border-black/5 flex items-center justify-center flex-shrink-0 text-stone-400">
+                          <IconImagePlus size={22} />
                         </div>
                       )}
 
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-semibold text-stone-900 truncate">{p.sku}</span>
-                          {p.price ? <span className="text-sm text-stone-600 flex-shrink-0 font-medium">฿{Number(p.price).toLocaleString()}</span> : null}
-                        </div>
-                        
-                        {p.name && (
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <span className="text-sm text-stone-500 truncate">{p.name}</span>
-                            <button 
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
-                                copyToClipboard(p.name, p.id, 'name'); 
-                              }} 
-                              className="p-1 text-stone-400 hover:text-rose-500 rounded-md hover:bg-white/50 active:bg-white transition-colors"
-                              title="คัดลอกชื่อสินค้า"
-                            >
-                              {copiedStatus.id === p.id && copiedStatus.type === 'name' ? <IconCheck size={13} className="text-emerald-600" /> : <IconCopy size={13} />}
-                            </button>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            {/* ชื่อสินค้าอยู่ด้านบนสุด พร้อมปุ่มคัดลอก */}
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-stone-900 text-[15px] truncate leading-tight">
+                                {p.name || p.sku}
+                              </span>
+                              {p.name && (
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); copyToClipboard(p.name, p.id, 'name'); }} 
+                                  className="p-1 text-stone-500 bg-white/60 hover:bg-white hover:text-rose-500 rounded-md shadow-sm transition-colors flex-shrink-0"
+                                  title="คัดลอกชื่อสินค้า"
+                                >
+                                  {copiedStatus.id === p.id && copiedStatus.type === 'name' ? <IconCheck size={14} className="text-emerald-600" /> : <IconCopy size={14} />}
+                                </button>
+                              )}
+                            </div>
+                            
+                            {/* SKU ถูกย้ายลงมาด้านล่าง */}
+                            {p.name && (
+                              <div className="text-sm text-stone-700 mt-1 truncate font-medium">SKU: {p.sku}</div>
+                            )}
+                            
+                            <div className="flex items-center gap-1.5 mt-1.5">
+                              <span className={`w-1.5 h-1.5 rounded-full ${statusColor} flex-shrink-0`} />
+                              <span className={`text-xs font-semibold ${statusText} bg-white/50 px-1.5 py-0.5 rounded`}>
+                                {statusLabel} · รวม {total} ตัว
+                              </span>
+                            </div>
                           </div>
-                        )}
 
-                        <div className="flex items-center gap-1.5 mt-1">
-                          <span className={`w-1.5 h-1.5 rounded-full ${statusColor} flex-shrink-0`} />
-                          <span className={`text-xs font-medium ${statusText}`}>
-                            {statusLabel} · รวม {total} ตัว
-                          </span>
+                          {p.price ? (
+                            <span className="text-sm text-stone-900 font-bold flex-shrink-0 mt-0.5 bg-white/40 px-2 py-1 rounded-lg">
+                              ฿{Number(p.price).toLocaleString()}
+                            </span>
+                          ) : null}
                         </div>
                       </div>
 
-                      {isExpanded ? <IconChevronUp size={18} className="text-stone-400 flex-shrink-0" /> : <IconChevronDown size={18} className="text-stone-400 flex-shrink-0" />}
+                      <div className="pt-1 pl-1">
+                         {isExpanded ? <IconChevronUp size={20} className="text-stone-500" /> : <IconChevronDown size={20} className="text-stone-500" />}
+                      </div>
                     </div>
 
                     {isExpanded && (
-                      <div className="px-3 pb-3 border-t border-black/5 pt-2 bg-white/40">
+                      <div className="px-3 pb-3 border-t border-black/10 pt-2 bg-white/60 backdrop-blur-sm">
                         {visibleSizes.length === 0 && (
-                          <p className="text-sm text-stone-400 text-center py-3">ของหมดสต๊อกในทุกไซส์ (กดแก้ไขเพื่อเพิ่มของ)</p>
+                          <p className="text-sm text-stone-500 text-center py-3 font-medium">ของหมดสต๊อกในทุกไซส์ (กดแก้ไขเพื่อเพิ่มของ)</p>
                         )}
-                        <div className="divide-y divide-black/5">
+                        <div className="divide-y divide-black/10">
                           {visibleSizes.map((s) => (
                             <div key={s} className="flex items-center gap-3 py-2">
-                              <span className="text-sm text-stone-700 font-medium w-16 flex-shrink-0">ไซส์ {s}</span>
+                              <span className="text-sm text-stone-800 font-bold w-16 flex-shrink-0">ไซส์ {s}</span>
                               <div className="flex items-center gap-2 ml-auto flex-shrink-0">
                                 <button
                                   onClick={() => bumpSize(p.id, s, -1)}
-                                  className="w-7 h-7 rounded-md bg-white border border-stone-200 flex items-center justify-center text-stone-500 active:bg-stone-100 flex-shrink-0 shadow-sm"
+                                  className="w-7 h-7 rounded-md bg-white border border-stone-200 flex items-center justify-center text-stone-600 active:bg-stone-100 flex-shrink-0 shadow-sm"
                                 >
-                                  <IconMinus size={13} />
+                                  <IconMinus size={14} />
                                 </button>
                                 <input
                                   type="number"
                                   value={p.sizes[s] ?? 0}
                                   onChange={(e) => updateSize(p.id, s, e.target.value)}
-                                  className="w-12 text-center text-sm font-semibold bg-transparent outline-none"
+                                  className="w-12 text-center text-sm font-bold text-stone-900 bg-transparent outline-none"
                                 />
                                 <button
                                   onClick={() => bumpSize(p.id, s, 1)}
-                                  className="w-7 h-7 rounded-md bg-white border border-stone-200 flex items-center justify-center text-stone-500 active:bg-stone-100 flex-shrink-0 shadow-sm"
+                                  className="w-7 h-7 rounded-md bg-white border border-stone-200 flex items-center justify-center text-stone-600 active:bg-stone-100 flex-shrink-0 shadow-sm"
                                 >
-                                  <IconPlus size={13} />
+                                  <IconPlus size={14} />
                                 </button>
                               </div>
                             </div>
@@ -354,43 +383,43 @@
                         </div>
 
                         {/* ระบบเลือกสีไฮไลท์ และ ปุ่มจัดการ */}
-                        <div className="flex items-center flex-wrap gap-y-3 mt-4 pt-3 border-t border-black/5">
-                          <div className="flex items-center gap-1.5 mr-auto">
-                            <span className="text-[11px] font-medium text-stone-400 mr-1">สี:</span>
-                            <button onClick={() => updateHighlight(p.id, 'none')} className={`w-5 h-5 rounded-full border-2 ${!p.highlightColor || p.highlightColor === 'none' ? 'border-stone-400 bg-white' : 'border-transparent bg-stone-200'}`} />
-                            <button onClick={() => updateHighlight(p.id, 'blue')} className={`w-5 h-5 rounded-full border-2 ${p.highlightColor === 'blue' ? 'border-sky-400 bg-sky-200' : 'border-transparent bg-sky-200'}`} />
-                            <button onClick={() => updateHighlight(p.id, 'green')} className={`w-5 h-5 rounded-full border-2 ${p.highlightColor === 'green' ? 'border-emerald-400 bg-emerald-200' : 'border-transparent bg-emerald-200'}`} />
-                            <button onClick={() => updateHighlight(p.id, 'yellow')} className={`w-5 h-5 rounded-full border-2 ${p.highlightColor === 'yellow' ? 'border-amber-400 bg-amber-200' : 'border-transparent bg-amber-200'}`} />
+                        <div className="flex items-center flex-wrap gap-y-3 mt-4 pt-3 border-t border-black/10">
+                          <div className="flex items-center gap-1.5 mr-auto bg-white/50 px-2 py-1.5 rounded-lg">
+                            <span className="text-[11px] font-bold text-stone-600 mr-1">ป้ายสี:</span>
+                            <button onClick={() => updateHighlight(p.id, 'none')} className={`w-5 h-5 rounded-full border-2 ${!p.highlightColor || p.highlightColor === 'none' ? 'border-stone-500 bg-white' : 'border-transparent bg-stone-300'}`} />
+                            <button onClick={() => updateHighlight(p.id, 'blue')} className={`w-5 h-5 rounded-full border-2 ${p.highlightColor === 'blue' ? 'border-blue-700 bg-blue-500' : 'border-transparent bg-blue-400'}`} />
+                            <button onClick={() => updateHighlight(p.id, 'green')} className={`w-5 h-5 rounded-full border-2 ${p.highlightColor === 'green' ? 'border-emerald-700 bg-emerald-500' : 'border-transparent bg-emerald-400'}`} />
+                            <button onClick={() => updateHighlight(p.id, 'yellow')} className={`w-5 h-5 rounded-full border-2 ${p.highlightColor === 'yellow' ? 'border-amber-700 bg-amber-500' : 'border-transparent bg-amber-400'}`} />
                           </div>
 
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => copySummary(p)}
-                              className="flex items-center gap-1 text-xs font-medium text-stone-600 bg-white border border-stone-200 hover:bg-stone-50 rounded-lg px-2.5 py-1.5 shadow-sm"
+                              className="flex items-center gap-1 text-xs font-bold text-stone-700 bg-white border border-stone-200 hover:bg-stone-50 rounded-lg px-2.5 py-1.5 shadow-sm"
                             >
-                              {copiedStatus.id === p.id && copiedStatus.type === 'summary' ? <IconCheck size={13} className="text-emerald-600" /> : <IconCopy size={13} />}
+                              {copiedStatus.id === p.id && copiedStatus.type === 'summary' ? <IconCheck size={14} className="text-emerald-600" /> : <IconCopy size={14} />}
                               {copiedStatus.id === p.id && copiedStatus.type === 'summary' ? "คัดลอกแล้ว" : "สรุปยอด"}
                             </button>
                             <button
                               onClick={() => openEditForm(p.id)}
-                              className="text-xs font-medium text-stone-600 bg-white border border-stone-200 hover:bg-stone-50 rounded-lg px-2.5 py-1.5 shadow-sm"
+                              className="text-xs font-bold text-stone-700 bg-white border border-stone-200 hover:bg-stone-50 rounded-lg px-2.5 py-1.5 shadow-sm"
                             >
                               แก้ไข
                             </button>
                             {confirmDeleteId === p.id ? (
                               <button
                                 onClick={() => deleteProduct(p.id)}
-                                className="flex items-center gap-1 text-xs font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg px-2.5 py-1.5 shadow-sm"
+                                className="flex items-center gap-1 text-xs font-bold text-white bg-red-500 hover:bg-red-600 rounded-lg px-2.5 py-1.5 shadow-sm"
                               >
-                                <IconTrash2 size={13} /> ยืนยัน
+                                <IconTrash2 size={14} /> ยืนยันลบ
                               </button>
                             ) : (
                               <button
                                 onClick={() => setConfirmDeleteId(p.id)}
                                 onBlur={() => setTimeout(() => setConfirmDeleteId(null), 2000)}
-                                className="flex items-center justify-center text-stone-400 hover:text-red-500 bg-white border border-stone-200 hover:bg-red-50 rounded-lg px-2.5 py-1.5 shadow-sm"
+                                className="flex items-center justify-center text-stone-500 hover:text-red-500 bg-white border border-stone-200 hover:bg-red-50 rounded-lg px-2.5 py-1.5 shadow-sm"
                               >
-                                <IconTrash2 size={13} />
+                                <IconTrash2 size={14} />
                               </button>
                             )}
                           </div>
@@ -401,8 +430,23 @@
                 );
               })}
             </div>
+
+            {/* ปุ่มเปิดระบบ Backup / Restore ข้อมูล */}
+            <div className="mt-8 text-center pb-6">
+              <button 
+                onClick={() => {
+                  setBackupText(JSON.stringify(products, null, 2));
+                  setBackupError("");
+                  setShowBackup(true);
+                }} 
+                className="text-xs font-medium text-stone-400 hover:text-stone-600 underline"
+              >
+                สำรองข้อมูล / นำเข้าข้อมูลกลับ (Backup & Restore)
+              </button>
+            </div>
           </div>
 
+          {/* Modal สำหรับเพิ่ม/แก้ไขสินค้า */}
           {showForm && (
             <ProductForm
               key={editingId || "new"}
@@ -413,6 +457,38 @@
               }}
               onSave={upsertProduct}
             />
+          )}
+
+          {/* Modal สำหรับ Backup / Restore */}
+          {showBackup && (
+            <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4 backdrop-blur-sm">
+              <div className="bg-white w-full max-w-md rounded-2xl flex flex-col shadow-2xl overflow-hidden">
+                <div className="px-4 py-3 border-b border-stone-100 flex justify-between items-center bg-stone-50">
+                  <h2 className="font-bold text-stone-800">จัดการข้อมูล (สำรอง / นำเข้า)</h2>
+                  <button onClick={() => setShowBackup(false)} className="text-stone-400 hover:text-stone-600 p-1"><IconX size={20}/></button>
+                </div>
+                <div className="p-4 space-y-3">
+                  <p className="text-xs text-stone-600 font-medium">
+                    หากข้อมูลหายเพราะเปิดสลับเบราว์เซอร์ ให้กลับไปเปิดลิงก์ในแอปเดิมแล้วกด <span className="font-bold text-stone-800">"คัดลอกข้อมูล"</span> จากนั้นนำรหัสมาวางที่นี่แล้วกด <span className="font-bold text-rose-500">"นำเข้าข้อมูล"</span>
+                  </p>
+                  <textarea 
+                    className="w-full h-40 bg-stone-50 border border-stone-200 rounded-xl p-3 text-[11px] font-mono text-stone-600 outline-none focus:ring-2 focus:ring-rose-300"
+                    value={backupText}
+                    onChange={(e) => setBackupText(e.target.value)}
+                    placeholder="วางข้อมูลที่คัดลอกมาที่นี่..."
+                  />
+                  {backupError && <p className="text-xs font-medium text-red-500">{backupError}</p>}
+                </div>
+                <div className="p-4 border-t border-stone-100 flex gap-3">
+                  <button onClick={() => copyToClipboard(backupText, 'backup', 'text')} className="flex-1 bg-stone-100 text-stone-700 py-2.5 rounded-xl text-sm font-bold hover:bg-stone-200 transition-colors">
+                    คัดลอกข้อมูล
+                  </button>
+                  <button onClick={handleImportData} className="flex-1 bg-rose-500 text-white py-2.5 rounded-xl text-sm font-bold hover:bg-rose-600 shadow-sm transition-colors">
+                    นำเข้าข้อมูล
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       );
@@ -457,10 +533,10 @@
       }
 
       return (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4 backdrop-blur-sm">
           <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl flex flex-col shadow-2xl" style={{ maxHeight: "92vh" }}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-stone-100 flex-shrink-0">
-              <h2 className="font-semibold text-stone-900">{initial ? "แก้ไขแบบสินค้า" : "เพิ่มแบบสินค้า"}</h2>
+              <h2 className="font-bold text-stone-900">{initial ? "แก้ไขแบบสินค้า" : "เพิ่มแบบสินค้า"}</h2>
               <button onClick={onCancel} className="text-stone-400 hover:text-stone-600 p-1">
                 <IconX size={20} />
               </button>
@@ -480,72 +556,72 @@
                 </label>
                 <div className="flex-1 space-y-2">
                   <div>
-                    <label className="text-xs text-stone-500 font-medium">SKU</label>
+                    <label className="text-xs text-stone-500 font-bold">SKU (รหัสสินค้า)</label>
                     <input
                       value={sku}
                       onChange={(e) => setSku(e.target.value)}
                       placeholder="เช่น 690211"
-                      className="w-full mt-0.5 bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-2 text-sm outline-none focus:ring-2 focus:ring-rose-300"
+                      className="w-full mt-0.5 bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-rose-300"
                     />
                   </div>
                 </div>
               </div>
 
               <div>
-                <label className="text-xs text-stone-500 font-medium">ชื่อสินค้า (ถ้ามี)</label>
+                <label className="text-xs text-stone-500 font-bold">ชื่อสินค้า (ถ้ามี)</label>
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="เช่น เสื้อยืดคอกลมสีขาว"
-                  className="w-full mt-0.5 bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-2 text-sm outline-none focus:ring-2 focus:ring-rose-300"
+                  className="w-full mt-0.5 bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-rose-300"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-stone-500 font-medium">ราคา (บาท)</label>
+                  <label className="text-xs text-stone-500 font-bold">ราคา (บาท)</label>
                   <input
                     type="number"
                     value={price}
                     onChange={(e) => setPrice(e.target.value)}
                     placeholder="0"
-                    className="w-full mt-0.5 bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-2 text-sm outline-none focus:ring-2 focus:ring-rose-300"
+                    className="w-full mt-0.5 bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-rose-300"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-stone-500 font-medium">จำนวนรวมทั้งหมด (ตัว)</label>
-                  <div className="w-full mt-0.5 bg-stone-100/50 border border-transparent rounded-lg px-2.5 py-2 text-sm text-stone-600 font-semibold flex items-center">
+                  <label className="text-xs text-stone-500 font-bold">จำนวนรวมทั้งหมด (ตัว)</label>
+                  <div className="w-full mt-0.5 bg-stone-100/50 border border-transparent rounded-lg px-2.5 py-2 text-sm text-stone-700 font-bold flex items-center">
                     {totalCurrent}
                   </div>
                 </div>
               </div>
 
               <div>
-                <label className="text-xs text-stone-500 font-medium mb-1 block">จำนวนแต่ละไซส์</label>
+                <label className="text-xs text-stone-500 font-bold mb-1 block">จำนวนแต่ละไซส์</label>
                 <div className="bg-stone-50 rounded-lg border border-stone-100 divide-y divide-stone-200 px-3">
                   {SIZES.map((s) => (
                     <div key={s} className="flex items-center justify-between py-2">
-                      <span className="text-sm text-stone-600 font-medium">ไซส์ {s}</span>
+                      <span className="text-sm text-stone-700 font-bold">ไซส์ {s}</span>
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
                           onClick={() => setSizes((prev) => ({ ...prev, [s]: Math.max(0, (Number(prev[s]) || 0) - 1) }))}
-                          className="w-7 h-7 rounded-md bg-white border border-stone-200 flex items-center justify-center text-stone-500 active:bg-stone-100 shadow-sm"
+                          className="w-7 h-7 rounded-md bg-white border border-stone-200 flex items-center justify-center text-stone-600 active:bg-stone-100 shadow-sm"
                         >
-                          <IconMinus size={13} />
+                          <IconMinus size={14} />
                         </button>
                         <input
                           type="number"
                           value={sizes[s] ?? 0}
                           onChange={(e) => setSizes((prev) => ({ ...prev, [s]: Math.max(0, Number(e.target.value) || 0) }))}
-                          className="w-12 text-center text-sm font-semibold bg-transparent outline-none"
+                          className="w-12 text-center text-sm font-bold bg-transparent outline-none"
                         />
                         <button
                           type="button"
                           onClick={() => setSizes((prev) => ({ ...prev, [s]: Math.max(0, (Number(prev[s]) || 0) + 1) }))}
-                          className="w-7 h-7 rounded-md bg-white border border-stone-200 flex items-center justify-center text-stone-500 active:bg-stone-100 shadow-sm"
+                          className="w-7 h-7 rounded-md bg-white border border-stone-200 flex items-center justify-center text-stone-600 active:bg-stone-100 shadow-sm"
                         >
-                          <IconPlus size={13} />
+                          <IconPlus size={14} />
                         </button>
                       </div>
                     </div>
@@ -553,13 +629,13 @@
                 </div>
               </div>
 
-              {error && <p className="text-xs text-red-500">{error}</p>}
+              {error && <p className="text-xs font-bold text-red-500">{error}</p>}
             </div>
 
             <div className="p-4 border-t border-stone-100 flex-shrink-0">
               <button
                 onClick={handleSubmit}
-                className="w-full bg-rose-500 hover:bg-rose-600 text-white font-medium rounded-xl py-3 text-sm shadow-sm shadow-rose-200"
+                className="w-full bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl py-3 text-sm shadow-sm shadow-rose-200 transition-colors"
               >
                 {initial ? "บันทึกการแก้ไข" : "เพิ่มลงคลัง"}
               </button>
