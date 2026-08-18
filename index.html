@@ -24,7 +24,37 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect, useRef, useMemo } = React;
+    const { useState, useEffect, useRef, useMemo, Component } = React;
+
+    // --- ระบบดักจับข้อผิดพลาด (ป้องกันจอขาว) ---
+    class ErrorBoundary extends Component {
+      constructor(props) {
+        super(props);
+        this.state = { hasError: false, errorMessage: "" };
+      }
+      static getDerivedStateFromError(error) {
+        return { hasError: true, errorMessage: error.toString() };
+      }
+      render() {
+        if (this.state.hasError) {
+          return (
+            <div className="min-h-screen bg-stone-50 flex flex-col items-center justify-center p-6 text-center">
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-red-200 max-w-sm w-full">
+                <h1 className="text-lg font-bold text-red-600 mb-2">แอปเกิดข้อผิดพลาด 🚧</h1>
+                <p className="text-sm text-stone-600 mb-4">ระบบหยุดทำงานชั่วคราวเนื่องจากข้อมูลขัดข้อง กรุณากดรีเฟรชเพื่อเริ่มต้นใหม่</p>
+                <div className="bg-red-50 p-3 rounded-lg text-xs text-red-800 text-left overflow-auto mb-4 font-mono h-24">
+                  {this.state.errorMessage}
+                </div>
+                <button onClick={() => window.location.reload()} className="w-full bg-red-500 text-white py-3 rounded-xl font-bold shadow-sm">
+                  รีเฟรชหน้าจอ
+                </button>
+              </div>
+            </div>
+          );
+        }
+        return this.props.children;
+      }
+    }
 
     const IconPlus = ({ size = 24, className = "", strokeWidth = 2 }) => (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/><path d="M12 5v14"/></svg>);
     const IconMinus = ({ size = 24, className = "" }) => (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/></svg>);
@@ -127,7 +157,7 @@
         return [...list].sort((a, b) => String(a.sku || "").localeCompare(String(b.sku || ""), "th"));
       }, [products, query]);
 
-      const grandTotal = useMemo(() => products.reduce((sum, p) => sum + totalOf(p.sizes), 0), [products]);
+      const grandTotal = useMemo(() => products.reduce((sum, p) => sum + totalOf(p.sizes || {}), 0), [products]);
 
       function toggleExpand(id) {
         setExpanded((prev) => {
@@ -139,15 +169,20 @@
 
       function updateSize(id, size, value) {
         const n = Math.max(0, Number(value) || 0);
-        setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, sizes: { ...p.sizes, [size]: n } } : p)));
+        setProducts((prev) => prev.map((p) => {
+          if (p.id !== id) return p;
+          const currentSizes = p.sizes || {};
+          return { ...p, sizes: { ...currentSizes, [size]: n } };
+        }));
       }
 
       function bumpSize(id, size, delta) {
         setProducts((prev) =>
           prev.map((p) => {
             if (p.id !== id) return p;
-            const cur = Number(p.sizes[size]) || 0;
-            return { ...p, sizes: { ...p.sizes, [size]: Math.max(0, cur + delta) } };
+            const currentSizes = p.sizes || {};
+            const cur = Number(currentSizes[size]) || 0;
+            return { ...p, sizes: { ...currentSizes, [size]: Math.max(0, cur + delta) } };
           })
         );
       }
@@ -203,10 +238,11 @@
       }
 
       function copySummary(p) {
-        const lines = SIZES.filter((s) => (p.sizes[s] || 0) > 0).map((s) => `ไซส์ ${s}: เหลือ ${p.sizes[s]} ตัว`);
+        const currentSizes = p.sizes || {};
+        const lines = SIZES.filter((s) => (currentSizes[s] || 0) > 0).map((s) => `ไซส์ ${s}: เหลือ ${currentSizes[s]} ตัว`);
         const text = [
           p.name ? `ชื่อ: ${p.name}` : null,
-          `SKU: ${p.sku}`,
+          `SKU: ${p.sku || "-"}`,
           p.price ? `ราคา: ${p.price} บาท` : null,
           lines.length ? lines.join("\n") : "ขณะนี้ของหมดสต๊อกทุกไซส์",
         ].filter(Boolean).join("\n");
@@ -236,6 +272,9 @@
       };
 
       const hasHighlightedProducts = products.some(p => p.highlightColor && p.highlightColor !== 'none');
+      
+      // ดึงข้อมูลสินค้าที่จะแก้ไขมาเตรียมไว้
+      const editingProduct = editingId ? products.find((p) => p.id === editingId) : null;
 
       return (
         <div className="min-h-screen bg-stone-50 text-stone-800">
@@ -304,9 +343,10 @@
 
             <div className="space-y-3">
               {filtered.map((p) => {
-                const total = totalOf(p.sizes);
+                const pSizes = p.sizes || {};
+                const total = totalOf(pSizes);
                 const isExpanded = expanded.has(p.id);
-                const visibleSizes = SIZES.filter((s) => (p.sizes[s] || 0) > 0);
+                const visibleSizes = SIZES.filter((s) => (pSizes[s] || 0) > 0);
                 
                 const statusColor = total > 0 ? "bg-emerald-500" : "bg-red-400";
                 const statusText = total > 0 ? "text-emerald-700" : "text-red-500";
@@ -321,7 +361,7 @@
                       className="w-full flex items-start gap-3 p-3 cursor-pointer"
                     >
                       {p.image ? (
-                        <img src={p.image} alt={p.sku} className="w-16 h-16 rounded-xl object-cover flex-shrink-0 border border-black/10 bg-white" />
+                        <img src={p.image} alt={p.sku || ""} className="w-16 h-16 rounded-xl object-cover flex-shrink-0 border border-black/10 bg-white" />
                       ) : (
                         <div className="w-16 h-16 rounded-xl bg-black/5 border border-black/5 flex items-center justify-center flex-shrink-0 text-stone-400">
                           <IconImagePlus size={22} />
@@ -333,7 +373,7 @@
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5">
                               <span className="font-bold text-stone-900 text-[15px] truncate leading-tight">
-                                {p.name || p.sku}
+                                {p.name || p.sku || "-"}
                               </span>
                               {p.name && (
                                 <button 
@@ -347,7 +387,7 @@
                             </div>
                             
                             {p.name && (
-                              <div className="text-sm text-stone-700 mt-1 truncate font-medium">SKU: {p.sku}</div>
+                              <div className="text-sm text-stone-700 mt-1 truncate font-medium">SKU: {p.sku || "-"}</div>
                             )}
                             
                             <div className="flex items-center gap-1.5 mt-1.5">
@@ -389,7 +429,7 @@
                                 </button>
                                 <input
                                   type="number"
-                                  value={p.sizes[s] ?? 0}
+                                  value={pSizes[s] ?? 0}
                                   onChange={(e) => updateSize(p.id, s, e.target.value)}
                                   onClick={(e) => e.stopPropagation()}
                                   className="w-12 text-center text-sm font-bold text-stone-900 bg-transparent outline-none"
@@ -513,16 +553,18 @@
       );
     }
 
+    // ฟอร์มสำหรับเพิ่ม/แก้ไขสินค้าที่ถูกเสริมความปลอดภัย
     function ProductForm({ initial, onCancel, onSave }) {
-      const [sku, setSku] = useState(initial?.sku || "");
-      const [name, setName] = useState(initial?.name || "");
-      const [price, setPrice] = useState(initial?.price ?? "");
-      const [image, setImage] = useState(initial?.image || null);
-      const [sizes, setSizes] = useState(initial?.sizes || emptySizes());
+      const [sku, setSku] = useState(() => initial?.sku || "");
+      const [name, setName] = useState(() => initial?.name || "");
+      const [price, setPrice] = useState(() => initial?.price ?? "");
+      const [image, setImage] = useState(() => initial?.image || null);
+      const [sizes, setSizes] = useState(() => initial?.sizes || emptySizes());
       const [uploading, setUploading] = useState(false);
       const [error, setError] = useState("");
 
-      const totalCurrent = totalOf(sizes);
+      const safeSizes = sizes || {};
+      const totalCurrent = totalOf(safeSizes);
 
       async function handleFile(e) {
         const file = e.target.files?.[0];
@@ -547,7 +589,7 @@
           name: String(name).trim(),
           price: price === "" ? "" : Number(price),
           image,
-          sizes,
+          sizes: safeSizes,
         });
       }
 
@@ -601,7 +643,7 @@
                   <label className="text-xs text-stone-500 font-bold">ราคา (บาท)</label>
                   <input
                     type="number"
-                    value={price}
+                    value={price ?? ""}
                     onChange={(e) => setPrice(e.target.value)}
                     placeholder="0"
                     className="w-full mt-0.5 bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-rose-300"
@@ -624,20 +666,20 @@
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => setSizes((prev) => ({ ...prev, [s]: Math.max(0, (Number(prev[s]) || 0) - 1) }))}
+                          onClick={() => setSizes((prev) => ({ ...(prev || {}), [s]: Math.max(0, (Number((prev || {})[s]) || 0) - 1) }))}
                           className="w-7 h-7 rounded-md bg-white border border-stone-200 flex items-center justify-center text-stone-600 active:bg-stone-100 shadow-sm"
                         >
                           <IconMinus size={14} />
                         </button>
                         <input
                           type="number"
-                          value={sizes[s] ?? 0}
-                          onChange={(e) => setSizes((prev) => ({ ...prev, [s]: Math.max(0, Number(e.target.value) || 0) }))}
+                          value={safeSizes[s] !== undefined ? safeSizes[s] : 0}
+                          onChange={(e) => setSizes((prev) => ({ ...(prev || {}), [s]: Math.max(0, Number(e.target.value) || 0) }))}
                           className="w-12 text-center text-sm font-bold bg-transparent outline-none"
                         />
                         <button
                           type="button"
-                          onClick={() => setSizes((prev) => ({ ...prev, [s]: Math.max(0, (Number(prev[s]) || 0) + 1) }))}
+                          onClick={() => setSizes((prev) => ({ ...(prev || {}), [s]: Math.max(0, (Number((prev || {})[s]) || 0) + 1) }))}
                           className="w-7 h-7 rounded-md bg-white border border-stone-200 flex items-center justify-center text-stone-600 active:bg-stone-100 shadow-sm"
                         >
                           <IconPlus size={14} />
@@ -665,7 +707,12 @@
     }
 
     const root = ReactDOM.createRoot(document.getElementById("root"));
-    root.render(<StockManager />);
+    // ห่อแอปด้วยระบบดักจับ Error ป้องกันจอขาว
+    root.render(
+      <ErrorBoundary>
+        <StockManager />
+      </ErrorBoundary>
+    );
   </script>
 </body>
 </html>
