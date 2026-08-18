@@ -3,21 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <!-- เปลี่ยนสัญลักษณ์ Icon ของเว็บเป็นตัว M -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90' font-family='sans-serif' fill='%23f43f5e'>M</text></svg>">
   <title>คลังสต๊อกเสื้อผ้า</title>
   
-  <!-- โหลด Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- โหลด React และ ReactDOM -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  
-  <!-- โหลด Babel (ตัวแปลภาษา React) -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-    /* ปิดไม่ให้ตัวเลขมีลูกศรขึ้นลงในบางเบราว์เซอร์ */
     input[type=number]::-webkit-inner-spin-button, 
     input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
   </style>
@@ -28,7 +24,6 @@
   <script type="text/babel">
     const { useState, useEffect, useRef, useMemo } = React;
 
-    // --- ส่วนสร้างไอคอน (แปลงมาให้เพื่อให้ทำงานในไฟล์เดียวได้) ---
     const IconPlus = ({ size = 24, className = "", strokeWidth = 2 }) => (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/><path d="M12 5v14"/></svg>);
     const IconMinus = ({ size = 24, className = "" }) => (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/></svg>);
     const IconSearch = ({ size = 24, className = "" }) => (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>);
@@ -81,7 +76,6 @@
       return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     }
 
-    // --- ส่วนระบบจัดการหลัก ---
     function StockManager() {
       const [products, setProducts] = useState([]);
       const [loaded, setLoaded] = useState(false);
@@ -90,11 +84,10 @@
       const [query, setQuery] = useState("");
       const [showForm, setShowForm] = useState(false);
       const [editingId, setEditingId] = useState(null);
-      const [copiedId, setCopiedId] = useState(null);
+      const [copiedStatus, setCopiedStatus] = useState({ id: null, type: null });
       const [confirmDeleteId, setConfirmDeleteId] = useState(null);
       const saveTimer = useRef(null);
 
-      // โหลดข้อมูล
       useEffect(() => {
         try {
           const saved = localStorage.getItem(STORAGE_KEY);
@@ -105,7 +98,6 @@
         setLoaded(true);
       }, []);
 
-      // บันทึกข้อมูลอัตโนมัติ
       useEffect(() => {
         if (!loaded) return;
         clearTimeout(saveTimer.current);
@@ -123,7 +115,7 @@
       const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();
         let list = products;
-        if (q) list = list.filter((p) => p.sku.toLowerCase().includes(q));
+        if (q) list = list.filter((p) => p.sku.toLowerCase().includes(q) || (p.name && p.name.toLowerCase().includes(q)));
         return [...list].sort((a, b) => a.sku.localeCompare(b.sku, "th"));
       }, [products, query]);
 
@@ -152,6 +144,10 @@
         );
       }
 
+      function updateHighlight(id, color) {
+        setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, highlightColor: color } : p)));
+      }
+
       function deleteProduct(id) {
         setProducts((prev) => prev.filter((p) => p.id !== id));
         setConfirmDeleteId(null);
@@ -177,43 +173,60 @@
         setEditingId(null);
       }
 
-      async function copySummary(p) {
-        const lines = SIZES.filter((s) => (p.sizes[s] || 0) > 0).map((s) => `ไซส์ ${s}: เหลือ ${p.sizes[s]} ตัว`);
-        const text = [
-          `SKU: ${p.sku}`,
-          p.price ? `ราคา: ${p.price} บาท` : null,
-          lines.length ? lines.join("\n") : "ขณะนี้ของหมดสต๊อกทุกไซส์",
-        ].filter(Boolean).join("\n");
-        
+      async function copyToClipboard(text, id, type) {
         try {
           await navigator.clipboard.writeText(text);
-          setCopiedId(p.id);
-          setTimeout(() => setCopiedId(null), 1500);
+          setCopiedStatus({ id, type });
+          setTimeout(() => setCopiedStatus({ id: null, type: null }), 1500);
         } catch (e) {
-            // ระบบสำรองกรณีเบราว์เซอร์ไม่รองรับ
             const el = document.createElement('textarea');
             el.value = text;
             document.body.appendChild(el);
             el.select();
             document.execCommand('copy');
             document.body.removeChild(el);
-            setCopiedId(p.id);
-            setTimeout(() => setCopiedId(null), 1500);
+            setCopiedStatus({ id, type });
+            setTimeout(() => setCopiedStatus({ id: null, type: null }), 1500);
         }
       }
 
+      function copySummary(p) {
+        const lines = SIZES.filter((s) => (p.sizes[s] || 0) > 0).map((s) => `ไซส์ ${s}: เหลือ ${p.sizes[s]} ตัว`);
+        const text = [
+          `SKU: ${p.sku}`,
+          p.name ? `ชื่อ: ${p.name}` : null,
+          p.price ? `ราคา: ${p.price} บาท` : null,
+          lines.length ? lines.join("\n") : "ขณะนี้ของหมดสต๊อกทุกไซส์",
+        ].filter(Boolean).join("\n");
+        
+        copyToClipboard(text, p.id, 'summary');
+      }
+
       const editingProduct = editingId ? products.find((p) => p.id === editingId) : null;
+
+      // ระบบจัดการสี
+      const bgColors = {
+        blue: 'bg-sky-50 border-sky-200',
+        green: 'bg-emerald-50 border-emerald-200',
+        yellow: 'bg-amber-50 border-amber-200',
+        none: 'bg-white border-stone-200'
+      };
 
       return (
         <div className="min-h-screen bg-stone-50 text-stone-800">
           <div className="max-w-2xl mx-auto px-4 pb-28 pt-5">
             <header className="mb-5">
               <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h1 className="text-xl font-bold text-stone-900 tracking-tight">คลังสต๊อกเสื้อผ้า</h1>
-                  <p className="text-sm text-stone-500 mt-0.5">
-                    {products.length} แบบ · รวม {grandTotal.toLocaleString()} ตัว
-                  </p>
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500 to-rose-600 text-white flex items-center justify-center font-bold text-2xl shadow-sm">
+                    M
+                  </div>
+                  <div>
+                    <h1 className="text-xl font-bold text-stone-900 tracking-tight">คลังสต๊อกสินค้า</h1>
+                    <p className="text-sm text-stone-500 mt-0.5">
+                      {products.length} แบบ · รวม {grandTotal.toLocaleString()} ตัว
+                    </p>
+                  </div>
                 </div>
                 <button
                   onClick={openAddForm}
@@ -229,7 +242,7 @@
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="ค้นหาด้วย SKU..."
+                  placeholder="ค้นหาด้วย SKU หรือชื่อสินค้า..."
                   className="w-full bg-white border border-stone-200 rounded-xl pl-9 pr-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300"
                 />
               </div>
@@ -243,7 +256,7 @@
             {loaded && filtered.length === 0 && (
               <div className="text-center py-16 px-6 bg-white rounded-2xl border border-dashed border-stone-300">
                 <p className="text-stone-500 text-sm">
-                  {products.length === 0 ? "ยังไม่มีแบบเสื้อผ้าในระบบ กดปุ่ม “เพิ่มแบบ” เพื่อเริ่มต้น" : "ไม่พบ SKU ที่ค้นหา"}
+                  {products.length === 0 ? "ยังไม่มีแบบสินค้าในระบบ กดปุ่ม “เพิ่มแบบ” เพื่อเริ่มต้น" : "ไม่พบรายการที่ค้นหา"}
                 </p>
               </div>
             )}
@@ -257,17 +270,19 @@
                 const statusColor = total > 0 ? "bg-emerald-500" : "bg-stone-300";
                 const statusText = total > 0 ? "text-emerald-600" : "text-stone-400";
                 const statusLabel = total > 0 ? "มีสินค้า" : "ของหมด";
+                
+                const cardBg = bgColors[p.highlightColor || 'none'];
 
                 return (
-                  <div key={p.id} className="bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-sm">
-                    <button
+                  <div key={p.id} className={`rounded-2xl border overflow-hidden shadow-sm transition-colors duration-200 ${cardBg}`}>
+                    <div
                       onClick={() => toggleExpand(p.id)}
-                      className="w-full flex items-center gap-3 p-3 text-left active:bg-stone-50 transition-colors"
+                      className="w-full flex items-center gap-3 p-3 cursor-pointer"
                     >
                       {p.image ? (
-                        <img src={p.image} alt={p.sku} className="w-14 h-14 rounded-xl object-cover flex-shrink-0 border border-stone-100" />
+                        <img src={p.image} alt={p.sku} className="w-14 h-14 rounded-xl object-cover flex-shrink-0 border border-black/5" />
                       ) : (
-                        <div className="w-14 h-14 rounded-xl bg-stone-100 flex items-center justify-center flex-shrink-0 text-stone-300">
+                        <div className="w-14 h-14 rounded-xl bg-black/5 flex items-center justify-center flex-shrink-0 text-stone-400">
                           <IconImagePlus size={20} />
                         </div>
                       )}
@@ -275,9 +290,26 @@
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-semibold text-stone-900 truncate">{p.sku}</span>
-                          {p.price ? <span className="text-sm text-stone-600 flex-shrink-0">฿{Number(p.price).toLocaleString()}</span> : null}
+                          {p.price ? <span className="text-sm text-stone-600 flex-shrink-0 font-medium">฿{Number(p.price).toLocaleString()}</span> : null}
                         </div>
-                        <div className="flex items-center gap-1.5 mt-1.5">
+                        
+                        {p.name && (
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <span className="text-sm text-stone-500 truncate">{p.name}</span>
+                            <button 
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                copyToClipboard(p.name, p.id, 'name'); 
+                              }} 
+                              className="p-1 text-stone-400 hover:text-rose-500 rounded-md hover:bg-white/50 active:bg-white transition-colors"
+                              title="คัดลอกชื่อสินค้า"
+                            >
+                              {copiedStatus.id === p.id && copiedStatus.type === 'name' ? <IconCheck size={13} className="text-emerald-600" /> : <IconCopy size={13} />}
+                            </button>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-1.5 mt-1">
                           <span className={`w-1.5 h-1.5 rounded-full ${statusColor} flex-shrink-0`} />
                           <span className={`text-xs font-medium ${statusText}`}>
                             {statusLabel} · รวม {total} ตัว
@@ -286,17 +318,17 @@
                       </div>
 
                       {isExpanded ? <IconChevronUp size={18} className="text-stone-400 flex-shrink-0" /> : <IconChevronDown size={18} className="text-stone-400 flex-shrink-0" />}
-                    </button>
+                    </div>
 
                     {isExpanded && (
-                      <div className="px-3 pb-3 border-t border-stone-100 pt-2 bg-stone-50/50">
+                      <div className="px-3 pb-3 border-t border-black/5 pt-2 bg-white/40">
                         {visibleSizes.length === 0 && (
                           <p className="text-sm text-stone-400 text-center py-3">ของหมดสต๊อกในทุกไซส์ (กดแก้ไขเพื่อเพิ่มของ)</p>
                         )}
-                        <div className="divide-y divide-stone-100">
+                        <div className="divide-y divide-black/5">
                           {visibleSizes.map((s) => (
                             <div key={s} className="flex items-center gap-3 py-2">
-                              <span className="text-sm text-stone-600 font-medium w-16 flex-shrink-0">ไซส์ {s}</span>
+                              <span className="text-sm text-stone-700 font-medium w-16 flex-shrink-0">ไซส์ {s}</span>
                               <div className="flex items-center gap-2 ml-auto flex-shrink-0">
                                 <button
                                   onClick={() => bumpSize(p.id, s, -1)}
@@ -321,37 +353,47 @@
                           ))}
                         </div>
 
-                        <div className="flex items-center gap-2 mt-3">
-                          <div className="flex-1" />
-                          <button
-                            onClick={() => copySummary(p)}
-                            className="flex items-center gap-1 text-xs font-medium text-stone-600 bg-white border border-stone-200 hover:bg-stone-50 rounded-lg px-2.5 py-1.5 shadow-sm"
-                          >
-                            {copiedId === p.id ? <IconCheck size={13} className="text-emerald-600" /> : <IconCopy size={13} />}
-                            {copiedId === p.id ? "คัดลอกแล้ว" : "คัดลอกให้ลูกค้า"}
-                          </button>
-                          <button
-                            onClick={() => openEditForm(p.id)}
-                            className="text-xs font-medium text-stone-600 bg-white border border-stone-200 hover:bg-stone-50 rounded-lg px-2.5 py-1.5 shadow-sm"
-                          >
-                            แก้ไข
-                          </button>
-                          {confirmDeleteId === p.id ? (
+                        {/* ระบบเลือกสีไฮไลท์ และ ปุ่มจัดการ */}
+                        <div className="flex items-center flex-wrap gap-y-3 mt-4 pt-3 border-t border-black/5">
+                          <div className="flex items-center gap-1.5 mr-auto">
+                            <span className="text-[11px] font-medium text-stone-400 mr-1">สี:</span>
+                            <button onClick={() => updateHighlight(p.id, 'none')} className={`w-5 h-5 rounded-full border-2 ${!p.highlightColor || p.highlightColor === 'none' ? 'border-stone-400 bg-white' : 'border-transparent bg-stone-200'}`} />
+                            <button onClick={() => updateHighlight(p.id, 'blue')} className={`w-5 h-5 rounded-full border-2 ${p.highlightColor === 'blue' ? 'border-sky-400 bg-sky-200' : 'border-transparent bg-sky-200'}`} />
+                            <button onClick={() => updateHighlight(p.id, 'green')} className={`w-5 h-5 rounded-full border-2 ${p.highlightColor === 'green' ? 'border-emerald-400 bg-emerald-200' : 'border-transparent bg-emerald-200'}`} />
+                            <button onClick={() => updateHighlight(p.id, 'yellow')} className={`w-5 h-5 rounded-full border-2 ${p.highlightColor === 'yellow' ? 'border-amber-400 bg-amber-200' : 'border-transparent bg-amber-200'}`} />
+                          </div>
+
+                          <div className="flex items-center gap-2">
                             <button
-                              onClick={() => deleteProduct(p.id)}
-                              className="flex items-center gap-1 text-xs font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg px-2.5 py-1.5 shadow-sm"
+                              onClick={() => copySummary(p)}
+                              className="flex items-center gap-1 text-xs font-medium text-stone-600 bg-white border border-stone-200 hover:bg-stone-50 rounded-lg px-2.5 py-1.5 shadow-sm"
                             >
-                              <IconTrash2 size={13} /> ยืนยันลบ
+                              {copiedStatus.id === p.id && copiedStatus.type === 'summary' ? <IconCheck size={13} className="text-emerald-600" /> : <IconCopy size={13} />}
+                              {copiedStatus.id === p.id && copiedStatus.type === 'summary' ? "คัดลอกแล้ว" : "สรุปยอด"}
                             </button>
-                          ) : (
                             <button
-                              onClick={() => setConfirmDeleteId(p.id)}
-                              onBlur={() => setTimeout(() => setConfirmDeleteId(null), 2000)}
-                              className="flex items-center justify-center text-stone-400 hover:text-red-500 bg-white border border-stone-200 hover:bg-red-50 rounded-lg px-2.5 py-1.5 shadow-sm"
+                              onClick={() => openEditForm(p.id)}
+                              className="text-xs font-medium text-stone-600 bg-white border border-stone-200 hover:bg-stone-50 rounded-lg px-2.5 py-1.5 shadow-sm"
                             >
-                              <IconTrash2 size={13} />
+                              แก้ไข
                             </button>
-                          )}
+                            {confirmDeleteId === p.id ? (
+                              <button
+                                onClick={() => deleteProduct(p.id)}
+                                className="flex items-center gap-1 text-xs font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg px-2.5 py-1.5 shadow-sm"
+                              >
+                                <IconTrash2 size={13} /> ยืนยัน
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => setConfirmDeleteId(p.id)}
+                                onBlur={() => setTimeout(() => setConfirmDeleteId(null), 2000)}
+                                className="flex items-center justify-center text-stone-400 hover:text-red-500 bg-white border border-stone-200 hover:bg-red-50 rounded-lg px-2.5 py-1.5 shadow-sm"
+                              >
+                                <IconTrash2 size={13} />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     )}
@@ -376,9 +418,9 @@
       );
     }
 
-    // --- ส่วนฟอร์มจัดการสินค้า ---
     function ProductForm({ initial, onCancel, onSave }) {
       const [sku, setSku] = useState(initial?.sku || "");
+      const [name, setName] = useState(initial?.name || "");
       const [price, setPrice] = useState(initial?.price ?? "");
       const [image, setImage] = useState(initial?.image || null);
       const [sizes, setSizes] = useState(initial?.sizes || emptySizes());
@@ -407,6 +449,7 @@
         }
         onSave({
           sku: sku.trim(),
+          name: name.trim(),
           price: price === "" ? "" : Number(price),
           image,
           sizes,
@@ -417,7 +460,7 @@
         <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4 backdrop-blur-sm">
           <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl flex flex-col shadow-2xl" style={{ maxHeight: "92vh" }}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-stone-100 flex-shrink-0">
-              <h2 className="font-semibold text-stone-900">{initial ? "แก้ไขแบบเสื้อผ้า" : "เพิ่มแบบเสื้อผ้า"}</h2>
+              <h2 className="font-semibold text-stone-900">{initial ? "แก้ไขแบบสินค้า" : "เพิ่มแบบสินค้า"}</h2>
               <button onClick={onCancel} className="text-stone-400 hover:text-stone-600 p-1">
                 <IconX size={20} />
               </button>
@@ -446,6 +489,16 @@
                     />
                   </div>
                 </div>
+              </div>
+
+              <div>
+                <label className="text-xs text-stone-500 font-medium">ชื่อสินค้า (ถ้ามี)</label>
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="เช่น เสื้อยืดคอกลมสีขาว"
+                  className="w-full mt-0.5 bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-2 text-sm outline-none focus:ring-2 focus:ring-rose-300"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -516,7 +569,6 @@
       );
     }
 
-    // ประมวลผล React ลงใน HTML
     const root = ReactDOM.createRoot(document.getElementById("root"));
     root.render(<StockManager />);
   </script>
