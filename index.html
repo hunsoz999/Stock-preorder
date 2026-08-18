@@ -14,6 +14,9 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   
+  <!-- เพิ่มระบบคลังข้อมูลขนาดใหญ่ (localForage) เพื่อแก้ปัญหาพื้นที่เก็บรูปภาพเต็ม -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+  
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
     input[type=number]::-webkit-inner-spin-button, 
@@ -26,7 +29,6 @@
   <script type="text/babel">
     const { useState, useEffect, useRef, useMemo, Component } = React;
 
-    // --- ระบบดักจับข้อผิดพลาด (ป้องกันจอขาว) ---
     class ErrorBoundary extends Component {
       constructor(props) {
         super(props);
@@ -126,24 +128,43 @@
 
       const saveTimer = useRef(null);
 
+      // โหลดข้อมูลด้วยระบบใหม่
       useEffect(() => {
-        try {
-          const saved = localStorage.getItem(STORAGE_KEY);
-          if (saved) setProducts(JSON.parse(saved));
-        } catch (e) {
-          console.error("โหลดข้อมูลไม่สำเร็จ", e);
+        async function loadData() {
+          try {
+            // ดึงจากโกดังใหม่ (localforage)
+            let saved = await localforage.getItem(STORAGE_KEY);
+            
+            // ถ้าระบบใหม่ยังว่างเปล่า ให้ไปดูดข้อมูล 19 แบบเก่า จากลิ้นชักเดิม (localStorage) มาใส่
+            if (!saved) {
+              const oldSaved = localStorage.getItem(STORAGE_KEY);
+              if (oldSaved) {
+                saved = JSON.parse(oldSaved);
+                await localforage.setItem(STORAGE_KEY, saved); // ย้ายเข้าโกดังใหม่ทันที
+              }
+            }
+
+            if (saved) {
+              setProducts(typeof saved === 'string' ? JSON.parse(saved) : saved);
+            }
+          } catch (e) {
+            console.error("โหลดข้อมูลไม่สำเร็จ", e);
+          }
+          setLoaded(true);
         }
-        setLoaded(true);
+        loadData();
       }, []);
 
+      // บันทึกข้อมูลด้วยระบบใหม่
       useEffect(() => {
         if (!loaded) return;
         clearTimeout(saveTimer.current);
-        saveTimer.current = setTimeout(() => {
+        saveTimer.current = setTimeout(async () => {
           try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
+            await localforage.setItem(STORAGE_KEY, products);
             setLoadError(false);
           } catch (e) {
+            console.error("Save error:", e);
             setLoadError(true);
           }
         }, 500);
@@ -272,8 +293,6 @@
       };
 
       const hasHighlightedProducts = products.some(p => p.highlightColor && p.highlightColor !== 'none');
-      
-      // ดึงข้อมูลสินค้าที่จะแก้ไขมาเตรียมไว้
       const editingProduct = editingId ? products.find((p) => p.id === editingId) : null;
 
       return (
@@ -327,7 +346,7 @@
               </div>
 
               {loadError && (
-                <p className="text-xs text-amber-600 mt-2">⚠ บันทึกข้อมูลไม่สำเร็จ ลองแก้ไขอีกครั้ง</p>
+                <p className="text-xs text-amber-600 mt-2">⚠ พื้นที่เก็บข้อมูลเต็ม หรือเซฟไม่สำเร็จ</p>
               )}
             </header>
 
@@ -520,7 +539,7 @@
           )}
 
           {showBackup && (
-            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
+            <div className="fixed inset-0 bg-black flex items-center justify-center z-[60] p-4">
               <div className="bg-white w-full max-w-md rounded-2xl flex flex-col shadow-2xl overflow-hidden">
                 <div className="px-4 py-3 border-b border-stone-100 flex justify-between items-center bg-stone-50">
                   <h2 className="font-bold text-stone-800">จัดการข้อมูล (สำรอง / นำเข้า)</h2>
@@ -553,7 +572,6 @@
       );
     }
 
-    // ฟอร์มสำหรับเพิ่ม/แก้ไขสินค้าที่ถูกเสริมความปลอดภัย
     function ProductForm({ initial, onCancel, onSave }) {
       const [sku, setSku] = useState(() => initial?.sku || "");
       const [name, setName] = useState(() => initial?.name || "");
@@ -594,7 +612,7 @@
       }
 
       return (
-        <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+        <div className="fixed inset-0 bg-black flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
           <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl flex flex-col shadow-2xl" style={{ maxHeight: "92vh" }}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-stone-100 flex-shrink-0">
               <h2 className="font-bold text-stone-900">{initial ? "แก้ไขแบบสินค้า" : "เพิ่มแบบสินค้า"}</h2>
@@ -707,7 +725,6 @@
     }
 
     const root = ReactDOM.createRoot(document.getElementById("root"));
-    // ห่อแอปด้วยระบบดักจับ Error ป้องกันจอขาว
     root.render(
       <ErrorBoundary>
         <StockManager />
